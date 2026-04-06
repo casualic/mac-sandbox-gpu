@@ -10,7 +10,7 @@ Claude Code's sandbox uses `sandbox-exec` (Apple Seatbelt) which blocks IOKit GP
 
 ## Solution
 
-A `sandbox-exec` wrapper that injects scoped Metal GPU permissions into the Seatbelt profile. Only fires for Python commands. Includes a kill switch, audit mode, and has passed four rounds of security review.
+A `sandbox-exec` wrapper that injects scoped Metal GPU permissions into the Seatbelt profile. Only fires for Python commands. Includes a kill switch, audit mode.
 
 ## Quick Start
 
@@ -23,6 +23,8 @@ A `sandbox-exec` wrapper that injects scoped Metal GPU permissions into the Seat
 
 ### 2. Set up the wrapper
 
+> **Run these commands in your terminal (or OUTSIDE OF SANDBOX).** The sandbox blocks writes to `~/.local/bin`.
+
 Ensure `~/.local/bin` is first in your PATH — add to `~/.zshrc`:
 
 ```bash
@@ -33,7 +35,7 @@ Then install:
 
 ```bash
 mkdir -p ~/.local/bin
-cp gpu_sandbox_override.sh ~/.local/bin/sandbox-exec
+cp ~/.claude/plugins/cache/mac-sandbox-gpu/gpu-sandbox/*/gpu_sandbox_override.sh ~/.local/bin/sandbox-exec
 chmod +x ~/.local/bin/sandbox-exec
 source ~/.zshrc
 ```
@@ -91,7 +93,7 @@ Average: ~11x speedup
 
 ## Security
 
-The wrapper has been through **four rounds of security review**. It only adds:
+Basic Security:
 
 - **IOKit access** — scoped to 5 specific GPU driver classes (AGX, IOGPU, IOSurface)
 - **IOKit property reads** — scoped to 21 GPU-related properties only
