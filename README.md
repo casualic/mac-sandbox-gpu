@@ -145,6 +145,10 @@ rm ~/.local/bin/sandbox-exec
 - `torch.svd` falls back to CPU automatically
 - LSTM/GRU show minimal GPU speedup (sequential bottleneck)
 
+## Disclaimer
+
+**Use at your own risk.** This tool modifies the behavior of macOS sandbox-exec, which is a security boundary. While it has been through four rounds of security review and permissions are tightly scoped, it does weaken the sandbox for Python processes. The authors are not responsible for any security issues, data loss, or other damages arising from its use. Review the source code and understand the permissions before installing.
+
 ## Related
 
 - [anthropics/claude-code#13108](https://github.com/anthropics/claude-code/issues/13108) — GPU passthrough feature request
