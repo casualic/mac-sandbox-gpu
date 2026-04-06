@@ -11,19 +11,22 @@ Run GPU-intensive Python code inside Claude Code's sandbox on macOS Apple Silico
 
 ## Rules
 
-1. **Use `python3`** to run scripts.
+1. **Run with the project's Python** — use `venv/bin/python3` if a `venv/` directory exists, otherwise fall back to `python3`.
 2. **Use `torch.device("mps")`** — not CUDA. Check with `torch.backends.mps.is_available()`.
 
 ### Template:
 
+If `venv/` exists in the project root:
+```
+venv/bin/python3 <script.py>
+```
+
+Otherwise:
 ```
 python3 <script.py>
 ```
 
-If the user provided an argument:
-```
-python3 $ARGUMENTS
-```
+If the user provided an argument, replace `<script.py>` with `$ARGUMENTS`.
 
 ## MPS limitations
 
