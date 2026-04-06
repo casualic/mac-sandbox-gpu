@@ -31,27 +31,38 @@ if [[ "${GPU_SANDBOX_OVERRIDE_DISABLED:-0}" == "1" ]]; then
 fi
 
 # --- Resolve current user's temp directory for scoped /var/folders access ---
-USER_TMPDIR="$(getconf DARWIN_USER_DIR 2>/dev/null || echo "/private/var/folders")"
-# Strip trailing slash for seatbelt subpath
+USER_TMPDIR="$(getconf DARWIN_USER_DIR 2>/dev/null)" || true
 USER_TMPDIR="${USER_TMPDIR%/}"
+if [[ -z "$USER_TMPDIR" || ! -d "$USER_TMPDIR" ]]; then
+    echo "[gpu_sandbox_override] ERROR: cannot determine user temp dir — refusing GPU injection" >&2
+    exec "$REAL_SANDBOX_EXEC" "$@"
+fi
 
 # --- Detect if command is ML/Python related ---
+# Only inspects args AFTER the profile string (i.e., the actual command being sandboxed)
 cmd_needs_gpu() {
+    local found_profile=0
+    local skip_next=0
     for arg in "$@"; do
+        if [[ $skip_next -eq 1 ]]; then
+            skip_next=0
+            continue
+        fi
+        # Skip sandbox-exec's own flags and profile string
         case "$arg" in
-            *python* | *Python* | *torch* | *tensorflow* | *keras* | *mps* | \
-            *metal* | *gpu_test* | *gpu_stress* | *benchmark* | *train* | \
-            *import\ torch* | *import\ tensorflow*)
-                return 0 ;;
+            -p|-f|-n|-D) skip_next=1; continue ;;
+        esac
+        # Now check the actual command args
+        case "$arg" in
+            *python* | *Python*) return 0 ;;
         esac
     done
     return 1
 }
 
 if ! cmd_needs_gpu "$@"; then
-    # Not ML-related — pass through without GPU rules
     if [[ "${GPU_SANDBOX_OVERRIDE_AUDIT:-0}" == "1" ]]; then
-        echo "[gpu_sandbox_override] SKIP (non-ML command): $*" >&2
+        echo "[gpu_sandbox_override] SKIP (non-Python command)" >&2
     fi
     exec "$REAL_SANDBOX_EXEC" "$@"
 fi
@@ -64,14 +75,35 @@ GPU_RULES="
 (allow iokit-open
   (iokit-user-client-class \"AGXDeviceUserClient\")
   (iokit-user-client-class \"AGXAcceleratorUserClient\")
-  (iokit-user-client-class \"AGXCommandQueue\")
   (iokit-user-client-class \"IOGPUDeviceUserClient\")
-  (iokit-user-client-class \"IOAccelerator\")
   (iokit-user-client-class \"IOAccelerationUserClient\")
   (iokit-user-client-class \"IOSurfaceRootUserClient\")
-  (iokit-user-client-class \"IOSurfaceSendRight\")
 )
-(allow iokit-get-properties)
+
+; IOKit properties — scoped to GPU-related properties only
+(allow iokit-get-properties
+  (iokit-property \"AGXFamilyName\")
+  (iokit-property \"gpu-core-count\")
+  (iokit-property \"gpu-num-perf-states\")
+  (iokit-property \"MetalPluginName\")
+  (iokit-property \"MetalPluginClassName\")
+  (iokit-property \"IOGPUFamily\")
+  (iokit-property \"IOGPUCommandQueueDepth\")
+  (iokit-property \"IOGPUCurrentComputeUnits\")
+  (iokit-property \"IOGPUMaximumComputeUnits\")
+  (iokit-property \"IOGPUMemorySize\")
+  (iokit-property \"model\")
+  (iokit-property \"name\")
+  (iokit-property \"device-id\")
+  (iokit-property \"vendor-id\")
+  (iokit-property \"class-code\")
+  (iokit-property \"compatible\")
+  (iokit-property \"IOClass\")
+  (iokit-property \"IONameMatch\")
+  (iokit-property \"IOProviderClass\")
+  (iokit-property \"IOPCITunnelled\")
+  (iokit-property \"IOPCITunnelCompatible\")
+)
 
 ; Sysctl: allow hardware/CPU queries needed by PyTorch, NumPy, Arrow, scipy
 (allow sysctl-read
@@ -80,6 +112,7 @@ GPU_RULES="
   (sysctl-name \"hw.l2cachesize\")
   (sysctl-name \"hw.l3cachesize\")
   (sysctl-name \"hw.cachelinesize\")
+  (sysctl-name \"hw.memsize\")
   (sysctl-name \"hw.optional.neon\")
   (sysctl-name \"hw.optional.AdvSIMD\")
   (sysctl-name \"hw.optional.floatingpoint\")
@@ -88,8 +121,6 @@ GPU_RULES="
   (sysctl-name \"machdep.cpu.core_count\")
   (sysctl-name \"machdep.cpu.thread_count\")
   (sysctl-name \"hw.cpusubtype\")
-  (sysctl-name \"hw.gpu_cores\")
-  (sysctl-name \"hw.memsize_usable\")
 )
 
 ; Mach services needed by Metal runtime and shader compilation
@@ -98,27 +129,19 @@ GPU_RULES="
   (global-name \"com.apple.MTLCompilerService\")
   (global-name-prefix \"com.apple.AGX\")
   (global-name-prefix \"com.apple.iogpu\")
-  (global-name-prefix \"com.apple.gpu\")
-  (global-name-prefix \"com.apple.metal\")
 )
 
 ; File access: Metal shader cache — scoped to current user's temp dir only
 (allow file-read* file-write*
   (subpath \"${USER_TMPDIR}\")
-  (subpath \"/Library/GPUBundles\")
 )
 (allow file-read*
+  (subpath \"/Library/GPUBundles\")
   (subpath \"/System/Library/Frameworks/Metal.framework\")
   (subpath \"/System/Library/Frameworks/MetalPerformanceShaders.framework\")
   (subpath \"/System/Library/Frameworks/MetalPerformanceShadersGraph.framework\")
   (subpath \"/System/Library/PrivateFrameworks/GPUCompiler.framework\")
   (subpath \"/System/Library/Extensions\")
-)
-
-; Temp file access for OMP and Metal shader compilation
-(allow file-read* file-write*
-  (subpath \"/tmp\")
-  (subpath \"/private/tmp\")
 )
 ; --- end GPU/Metal override ---
 "
@@ -156,7 +179,18 @@ if [[ $profile_index -ge 0 ]]; then
     args[$profile_index]="$modified_profile"
 
     if [[ "${GPU_SANDBOX_OVERRIDE_AUDIT:-0}" == "1" ]]; then
-        echo "[gpu_sandbox_override] INJECT GPU rules for: $*" >&2
+        # Log only the command being sandboxed, not the profile string
+        cmd_args=()
+        skip=0
+        for ((i=0; i<${#args[@]}; i++)); do
+            if [[ $skip -eq 1 ]]; then skip=0; continue; fi
+            case "${args[$i]}" in
+                -p|-f|-n) skip=1; continue ;;
+                -D) skip=1; continue ;;
+                *) cmd_args+=("${args[$i]}") ;;
+            esac
+        done
+        echo "[gpu_sandbox_override] INJECT GPU rules for: ${cmd_args[*]}" >&2
     fi
 fi
 
