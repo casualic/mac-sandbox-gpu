@@ -1,0 +1,18 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "mac-sandbox-gpu",
+  "version": "1.0.0",
+  "description": "Marketplace for GPU sandbox plugin — enables Apple Metal (MPS) GPU access inside Claude Code's sandbox on macOS",
+  "owner": {
+    "name": "casualic"
+  },
+  "plugins": [
+    {
+      "name": "gpu-sandbox",
+      "description": "Enables Apple Metal (MPS) GPU access inside Claude Code's sandbox on macOS. Provides a sandbox-exec wrapper and a /gpu-run skill.",
+      "version": "1.0.0",
+      "source": ".",
+      "category": "development"
+    }
+  ]
+}

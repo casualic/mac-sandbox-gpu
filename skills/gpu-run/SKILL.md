@@ -30,4 +30,3 @@ venv/bin/python3 $ARGUMENTS 2>&1 | grep -v "Error creating directory\|don.*t hav
 
 - `AdaptiveAvgPool1d` — use `AvgPool1d` instead
 - `torch.svd` falls back to CPU automatically
-- LSTM/GRU show minimal GPU speedup
