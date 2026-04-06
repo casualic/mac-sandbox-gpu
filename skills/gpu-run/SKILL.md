@@ -47,7 +47,7 @@ Before running GPU code, verify the setup:
    Expected: `~/.local/bin/sandbox-exec` (must come before `/usr/bin/sandbox-exec`)
 
    If it shows `/usr/bin/sandbox-exec`, the override is NOT installed.
-   Tell the user to follow the install instructions in `INSTALL.md`, or run
+   Tell the user to follow the install instructions in `README.md`, or run
    these commands in another terminal:
    ```
    mkdir -p ~/.local/bin

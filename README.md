@@ -17,7 +17,7 @@ A `sandbox-exec` wrapper that injects scoped Metal GPU permissions into the Seat
 ### 1. Install the Claude Code plugin
 
 ```
-/plugin marketplace add mateuszdelpercio/SandboxGPU
+/plugin marketplace add casualic/mac-sandbox-gpu
 /plugin install gpu-sandbox@mateuszdelpercio
 ```
 
