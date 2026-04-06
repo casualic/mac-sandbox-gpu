@@ -60,12 +60,11 @@ Or just ask Claude to run GPU code — the CLAUDE.md ensures it uses the right i
 ### Manual usage (without the skill)
 
 ```bash
-PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0 venv/bin/python3 my_script.py
+venv/bin/python3 my_script.py
 ```
 
 Key rules:
 - Use `venv/bin/python3` instead of `source venv/bin/activate` (avoids permission prompts)
-- Prefix with `PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0` for memory-heavy models
 - Use `torch.device("mps")`, not CUDA
 
 ## Benchmark Results

@@ -9,31 +9,28 @@ argument-hint: [script.py]
 
 Run GPU-intensive Python code inside Claude Code's sandbox on macOS Apple Silicon.
 
-## Critical Rules for GPU in Sandbox
+## Rules for GPU in Sandbox
 
-When running Python code that uses GPU (PyTorch MPS) inside sandbox, you MUST:
+When running Python code that uses GPU (PyTorch MPS) inside sandbox:
 
-1. **Always prefix with** `PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0` — without this,
-   MPS will OOM on large models because the sandbox restricts memory signaling.
-
-2. **Always use `venv/bin/python3`** instead of `source venv/bin/activate` —
+1. **Always use `venv/bin/python3`** instead of `source venv/bin/activate` —
    `source` triggers a shell-eval permission prompt every time in sandbox mode.
 
-3. **Always use `torch.device("mps")`** — this is Apple Silicon's GPU backend.
+2. **Always use `torch.device("mps")`** — this is Apple Silicon's GPU backend.
    CUDA does not exist on macOS. Check with `torch.backends.mps.is_available()`.
 
-4. **Filter noisy but harmless warnings** with:
+3. **Filter noisy but harmless warnings** with:
    `2>&1 | grep -v "Error creating directory\|don.*t have permission\|OMP: Warning"`
 
 ### Template command for any GPU Python script:
 
 ```
-PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0 venv/bin/python3 <script.py> 2>&1 | grep -v "Error creating directory\|don.*t have permission\|OMP: Warning"
+venv/bin/python3 <script.py> 2>&1 | grep -v "Error creating directory\|don.*t have permission\|OMP: Warning"
 ```
 
 If the user provided an argument, run:
 ```
-PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0 venv/bin/python3 $ARGUMENTS 2>&1 | grep -v "Error creating directory\|don.*t have permission\|OMP: Warning"
+venv/bin/python3 $ARGUMENTS 2>&1 | grep -v "Error creating directory\|don.*t have permission\|OMP: Warning"
 ```
 
 ## Pre-flight Checks
@@ -58,7 +55,7 @@ Before running GPU code, verify the setup:
 
 2. Verify MPS is available through the sandbox:
    ```
-   PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0 venv/bin/python3 -c "import torch; print('MPS:', torch.backends.mps.is_available())"
+   venv/bin/python3 -c "import torch; print('MPS:', torch.backends.mps.is_available())"
    ```
    If this prints `MPS: False`, the override is not working.
 
@@ -68,12 +65,12 @@ If no script argument was provided, run the built-in tests:
 
 1. Stress test (11 model architectures on GPU):
    ```
-   PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0 venv/bin/python3 gpu_stress_test.py 2>&1 | grep -v "Error creating directory\|don.*t have permission\|OMP: Warning" | tee stress_test_log.txt
+   venv/bin/python3 gpu_stress_test.py 2>&1 | grep -v "Error creating directory\|don.*t have permission\|OMP: Warning" | tee stress_test_log.txt
    ```
 
 2. CPU vs GPU benchmark:
    ```
-   PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0 venv/bin/python3 cpu_vs_gpu_benchmark.py 2>&1 | grep -v "Error creating directory\|don.*t have permission\|OMP: Warning" | tee benchmark_log.txt
+   venv/bin/python3 cpu_vs_gpu_benchmark.py 2>&1 | grep -v "Error creating directory\|don.*t have permission\|OMP: Warning" | tee benchmark_log.txt
    ```
 
 3. Report results summary to the user.
@@ -97,4 +94,3 @@ Known MPS limitations:
 - `AdaptiveAvgPool1d` fails with non-divisible sizes — use `AvgPool1d` instead
 - `torch.svd` / `torch.linalg.svd` falls back to CPU automatically
 - LSTM/GRU show minimal speedup over CPU due to sequential nature
-- For memory-heavy models, `PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0` is mandatory
