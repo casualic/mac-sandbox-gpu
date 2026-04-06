@@ -1,0 +1,11 @@
+{
+  "name": "gpu-sandbox",
+  "description": "Enables Apple Metal (MPS) GPU access inside Claude Code's sandbox on macOS. Provides a sandbox-exec wrapper and a /gpu-run skill for running PyTorch ML workloads on GPU in sandbox mode.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Mateusz Delpercio"
+  },
+  "homepage": "https://github.com/mateuszdelpercio/SandboxGPU",
+  "repository": "https://github.com/mateuszdelpercio/SandboxGPU",
+  "license": "MIT"
+}

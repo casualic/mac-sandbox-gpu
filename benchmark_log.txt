@@ -1,0 +1,30 @@
+MPS available: True
+Loading test.parquet ...
+Data: 200,000 rows, 86 features
+
+Running CPU vs GPU benchmarks (3 epochs each)...
+======================================================================
+  MLP                  CPU=   1.45s  GPU=   0.55s  Speedup=  2.6x
+  1D-CNN               CPU= 118.69s  GPU=   2.33s  Speedup= 51.0x
+  LSTM (50k)           CPU=  31.74s  GPU=  31.39s  Speedup=  1.0x
+  ResNet               CPU=   6.00s  GPU=   1.47s  Speedup=  4.1x
+  Wide&Deep            CPU=   1.70s  GPU=   0.42s  Speedup=  4.0x
+  Autoencoder          CPU=   0.45s  GPU=   0.28s  Speedup=  1.6x
+
+  Large matrix multiply (4096x4096, 20 iterations):
+  MatrixMul            CPU=   5.83s  GPU=   0.46s  Speedup= 12.6x
+
+======================================================================
+Model                    CPU(s)     GPU(s)    Speedup
+----------------------------------------------------------------------
+MLP                        1.45       0.55       2.6x ***
+1D-CNN                   118.69       2.33      51.0x ***
+LSTM (50k)                31.74      31.39       1.0x
+ResNet                     6.00       1.47       4.1x ***
+Wide&Deep                  1.70       0.42       4.0x ***
+Autoencoder                0.45       0.28       1.6x
+MatrixMul                  5.83       0.46      12.6x ***
+======================================================================
+
+Average speedup: 11.0x
+GPU sandbox override: WORKING
