@@ -1,122 +1,131 @@
 # GPU Sandbox Override for Claude Code on macOS
 
-Enables Apple Metal (MPS) GPU access inside Claude Code's sandbox on macOS.
+Enables Apple Metal (MPS) GPU access inside Claude Code's sandbox on macOS Apple Silicon.
+
+**Average speedup: ~11x** across ML workloads (up to 50x for convolutions).
 
 ## Problem
 
-Claude Code's sandbox uses `sandbox-exec` (Apple Seatbelt) which blocks IOKit
-GPU access. This means PyTorch, TensorFlow, and other ML frameworks fall back
-to CPU even on Apple Silicon Macs with powerful GPUs.
+Claude Code's sandbox uses `sandbox-exec` (Apple Seatbelt) which blocks IOKit GPU access. PyTorch, TensorFlow, and other ML frameworks silently fall back to CPU — even on M1/M2/M3/M4 Macs.
 
-## How It Works
+## Solution
 
-A wrapper script intercepts `sandbox-exec` calls and injects additional Seatbelt
-rules that allow:
+A `sandbox-exec` wrapper that injects scoped Metal GPU permissions into the Seatbelt profile. Only fires for Python commands. Includes a kill switch, audit mode, and has passed four rounds of security review.
 
-- **IOKit access** — lets Metal talk to the GPU hardware
-- **Sysctl reads** — CPU/cache info queries needed by PyTorch, NumPy, Arrow
-- **Mach service lookups** — Metal shader compiler, GPU memory daemon
-- **Shader cache writes** — Metal Performance Shaders graph cache
-- **Framework reads** — Metal system frameworks (read-only)
+## Quick Start
 
-None of these open network access or weaken file restrictions.
+### 1. Install the Claude Code plugin
 
-## Requirements
-
-- macOS on Apple Silicon (M1/M2/M3/M4)
-- `~/.local/bin` must be in your PATH before `/usr/bin`
-- Python venv with PyTorch installed (`pip install torch`)
-
-## Installation
-
-### Install the Claude Code plugin
-
-```bash
+```
 /plugin marketplace add mateuszdelpercio/SandboxGPU
 /plugin install gpu-sandbox@mateuszdelpercio
 ```
 
-Then follow steps 1-4 below to set up the sandbox-exec wrapper.
+### 2. Set up the wrapper
 
-### 1. Ensure `~/.local/bin` is first in PATH
-
-Add to your `~/.zshrc` (or `~/.bashrc`):
+Ensure `~/.local/bin` is first in your PATH — add to `~/.zshrc`:
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Then reload: `source ~/.zshrc`
-
-### 2. Install the wrapper
+Then install:
 
 ```bash
 mkdir -p ~/.local/bin
 cp gpu_sandbox_override.sh ~/.local/bin/sandbox-exec
 chmod +x ~/.local/bin/sandbox-exec
+source ~/.zshrc
 ```
 
-### 3. Verify installation
+### 3. Verify
 
 ```bash
 which sandbox-exec
-# Should output: /Users/<you>/.local/bin/sandbox-exec
+# Should output: ~/.local/bin/sandbox-exec (NOT /usr/bin/sandbox-exec)
 ```
 
 ### 4. Restart Claude Code
 
-The wrapper is picked up on next sandbox-exec invocation. Restart Claude Code
-or start a new session.
+Start a new session with sandbox enabled. The `/gpu-run` skill is now available.
 
-### 5. Test it
+## Usage
 
-Enable sandbox in Claude Code, then run:
+```
+/gpu-run my_training_script.py
+```
+
+Or just ask Claude to run GPU code — the CLAUDE.md ensures it uses the right invocation pattern.
+
+### Manual usage (without the skill)
 
 ```bash
-venv/bin/python3 -c "import torch; print('MPS available:', torch.backends.mps.is_available())"
+PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0 venv/bin/python3 my_script.py
 ```
 
-Should print `MPS available: True`.
+Key rules:
+- Use `venv/bin/python3` instead of `source venv/bin/activate` (avoids permission prompts)
+- Prefix with `PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0` for memory-heavy models
+- Use `torch.device("mps")`, not CUDA
 
-Or use the Claude skill:
+## Benchmark Results
 
 ```
-/gpu-run
+Model                    CPU(s)     GPU(s)    Speedup
+----------------------------------------------------------------------
+1D-CNN                   118.69       2.33      50.5x
+MatrixMul (4096x4096)      5.83       0.46      12.7x
+ResNet                     6.00       1.47       4.1x
+Wide&Deep                  1.70       0.42       4.0x
+MLP                        1.45       0.55       2.6x
+Autoencoder                0.45       0.28       1.6x
+LSTM                      31.74      31.39       1.0x
+----------------------------------------------------------------------
+Average: ~11x speedup
 ```
+
+## Environment Variables
+
+| Variable | Effect |
+|----------|--------|
+| `GPU_SANDBOX_OVERRIDE_DISABLED=1` | Bypass override entirely, use original sandbox |
+| `GPU_SANDBOX_OVERRIDE_AUDIT=1` | Log to stderr when GPU rules are injected/skipped |
+
+## Security
+
+The wrapper has been through **four rounds of security review**. It only adds:
+
+- **IOKit access** — scoped to 5 specific GPU driver classes (AGX, IOGPU, IOSurface)
+- **IOKit property reads** — scoped to 21 GPU-related properties only
+- **Sysctl reads** — CPU/cache topology queries (read-only)
+- **Mach lookups** — Metal shader compiler + GPU memory daemon
+- **File access** — current user's shader cache dir only; Metal frameworks read-only
+
+It does **not**:
+- Open network access
+- Bypass file write restrictions
+- Allow access to non-GPU IOKit devices (USB, Bluetooth, HID, SMC)
+- Inject rules into non-Python sandbox commands
+- Allow reading other users' temp data
+
+### Safety features
+- Only injects for Python commands (other commands pass through untouched)
+- Kill switch via environment variable
+- Refuses injection if profile is malformed
+- Refuses injection if user temp dir can't be safely resolved
+- Audit mode for debugging
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `gpu_sandbox_override.sh` | The sandbox-exec wrapper (install to `~/.local/bin/sandbox-exec`) |
-| `gpu_test.py` | Quick MPS sanity check — trains a simple model on test.parquet |
-| `gpu_stress_test.py` | 11 model architectures (MLP, CNN, LSTM, GRU, Transformer, etc.) |
-| `cpu_vs_gpu_benchmark.py` | Side-by-side CPU vs GPU timing comparison |
-| `benchmark_log.txt` | Latest benchmark results |
-| `stress_test_log.txt` | Latest stress test results |
-
-## Benchmark Results (Apple Silicon)
-
-```
-Model                    CPU(s)     GPU(s)    Speedup
-----------------------------------------------------------------------
-MLP                        1.45       0.55       2.6x
-1D-CNN                   118.69       2.33      51.0x
-LSTM (50k)                31.74      31.39       1.0x
-ResNet                     6.00       1.47       4.1x
-Wide&Deep                  1.70       0.42       4.0x
-Autoencoder                0.45       0.28       1.6x
-MatrixMul                  5.83       0.46      12.6x
-----------------------------------------------------------------------
-Average speedup: 11.0x
-```
-
-## Tips
-
-- Always use `venv/bin/python3` instead of `source venv/bin/activate` to avoid
-  shell-eval permission prompts in sandbox mode
-- Set `PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0` for memory-heavy models (LSTM, large batches)
-- The `torchinductor_<username>/` directory is a PyTorch cache artifact — safe to delete
+| `gpu_sandbox_override.sh` | The sandbox-exec wrapper |
+| `skills/gpu-run/SKILL.md` | Claude Code plugin skill |
+| `.claude-plugin/plugin.json` | Plugin manifest |
+| `CLAUDE.md` | Project-level Claude instructions |
+| `gpu_test.py` | Quick MPS sanity check |
+| `gpu_stress_test.py` | 11 model architectures stress test |
+| `cpu_vs_gpu_benchmark.py` | CPU vs GPU timing comparison |
 
 ## Uninstall
 
@@ -124,20 +133,19 @@ Average speedup: 11.0x
 rm ~/.local/bin/sandbox-exec
 ```
 
-## Security Notes
+## Requirements
 
-The override only adds GPU-related permissions:
-- IOKit device access (GPU hardware only)
-- Read-only sysctl queries (CPU/cache info)
-- Apple GPU mach services (shader compiler, memory daemon)
-- Shader cache in `/private/var/folders` (macOS temp)
-- Read-only access to Metal system frameworks
+- macOS on Apple Silicon (M1/M2/M3/M4)
+- Claude Code with sandbox enabled
+- Python 3.10+ with PyTorch (`pip install torch`)
 
-It does **not** open network access, bypass file write restrictions on your
-project, or allow access to credentials/secrets. The sandbox remains enforced
-for everything else.
+## Known MPS Limitations
 
-## Related Issues
+- `AdaptiveAvgPool1d` — use `AvgPool1d` instead
+- `torch.svd` falls back to CPU automatically
+- LSTM/GRU show minimal GPU speedup (sequential bottleneck)
 
-- [anthropics/claude-code#13108](https://github.com/anthropics/claude-code/issues/13108) — GPU device passthrough (Linux bwrap wrapper)
-- [anthropics/claude-code#37481](https://github.com/anthropics/claude-code/issues/37481) — macOS Metal/IOKit sandbox blocking
+## Related
+
+- [anthropics/claude-code#13108](https://github.com/anthropics/claude-code/issues/13108) — GPU passthrough feature request
+- [anthropics/claude-code#37481](https://github.com/anthropics/claude-code/issues/37481) — macOS Metal sandbox blocking

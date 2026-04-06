@@ -37,6 +37,10 @@ if [[ -z "$USER_TMPDIR" || ! -d "$USER_TMPDIR" ]]; then
     echo "[gpu_sandbox_override] ERROR: cannot determine user temp dir — refusing GPU injection" >&2
     exec "$REAL_SANDBOX_EXEC" "$@"
 fi
+if [[ "$USER_TMPDIR" == *'"'* || "$USER_TMPDIR" == *'\\'* ]]; then
+    echo "[gpu_sandbox_override] ERROR: user temp dir contains unsafe characters — refusing GPU injection" >&2
+    exec "$REAL_SANDBOX_EXEC" "$@"
+fi
 
 # --- Detect if command is ML/Python related ---
 # Only inspects args AFTER the profile string (i.e., the actual command being sandboxed)
@@ -50,7 +54,8 @@ cmd_needs_gpu() {
         fi
         # Skip sandbox-exec's own flags and profile string
         case "$arg" in
-            -p|-f|-n|-D) skip_next=1; continue ;;
+            -p|-f|-n) skip_next=1; continue ;;
+            -D*) continue ;;
         esac
         # Now check the actual command args
         case "$arg" in
@@ -92,6 +97,8 @@ GPU_RULES="
   (iokit-property \"IOGPUCurrentComputeUnits\")
   (iokit-property \"IOGPUMaximumComputeUnits\")
   (iokit-property \"IOGPUMemorySize\")
+  ; Generic properties below are read by Metal during IORegistry device-tree
+  ; traversal for GPU enumeration. They are read-only and ubiquitous.
   (iokit-property \"model\")
   (iokit-property \"name\")
   (iokit-property \"device-id\")
@@ -101,6 +108,7 @@ GPU_RULES="
   (iokit-property \"IOClass\")
   (iokit-property \"IONameMatch\")
   (iokit-property \"IOProviderClass\")
+  ; eGPU detection (Thunderbolt-attached GPUs)
   (iokit-property \"IOPCITunnelled\")
   (iokit-property \"IOPCITunnelCompatible\")
 )
@@ -124,6 +132,8 @@ GPU_RULES="
 )
 
 ; Mach services needed by Metal runtime and shader compilation
+; Note: AGX and iogpu services are kernel-registered, not launchd-managed,
+; so exact names vary by hardware/macOS version. Prefix match is required.
 (allow mach-lookup
   (global-name \"com.apple.gpumemd.source\")
   (global-name \"com.apple.MTLCompilerService\")
@@ -186,7 +196,7 @@ if [[ $profile_index -ge 0 ]]; then
             if [[ $skip -eq 1 ]]; then skip=0; continue; fi
             case "${args[$i]}" in
                 -p|-f|-n) skip=1; continue ;;
-                -D) skip=1; continue ;;
+                -D*) continue ;;
                 *) cmd_args+=("${args[$i]}") ;;
             esac
         done
