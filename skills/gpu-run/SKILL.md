@@ -11,19 +11,18 @@ Run GPU-intensive Python code inside Claude Code's sandbox on macOS Apple Silico
 
 ## Rules
 
-1. **Use `venv/bin/python3`** — never `source venv/bin/activate` (triggers permission prompts)
+1. **Use `python3`** to run scripts.
 2. **Use `torch.device("mps")`** — not CUDA. Check with `torch.backends.mps.is_available()`.
-3. **Filter warnings**: `2>&1 | grep -v "Error creating directory\|don.*t have permission\|OMP: Warning"`
 
 ### Template:
 
 ```
-venv/bin/python3 <script.py> 2>&1 | grep -v "Error creating directory\|don.*t have permission\|OMP: Warning"
+python3 <script.py>
 ```
 
 If the user provided an argument:
 ```
-venv/bin/python3 $ARGUMENTS 2>&1 | grep -v "Error creating directory\|don.*t have permission\|OMP: Warning"
+python3 $ARGUMENTS
 ```
 
 ## MPS limitations

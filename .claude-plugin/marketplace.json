@@ -11,7 +11,7 @@
       "name": "gpu-sandbox",
       "description": "Enables Apple Metal (MPS) GPU access inside Claude Code's sandbox on macOS. Provides a sandbox-exec wrapper and a /gpu-run skill.",
       "version": "1.0.0",
-      "source": ".",
+      "source": "./",
       "category": "development"
     }
   ]

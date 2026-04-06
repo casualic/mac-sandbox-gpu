@@ -6,12 +6,8 @@ This project enables Apple Metal (MPS) GPU access inside Claude Code's sandbox o
 
 When running Python scripts (especially ML/GPU code) in sandbox mode:
 
-1. **Always use** `venv/bin/python3` — never `source venv/bin/activate` (triggers permission prompts)
-2. **Filter harmless warnings** with: `2>&1 | grep -v "Error creating directory\|don.*t have permission\|OMP: Warning"`
-
-Template:
 ```
-venv/bin/python3 <script.py> 2>&1 | grep -v "Error creating directory\|don.*t have permission\|OMP: Warning"
+python3 <script.py>
 ```
 
 ## GPU device
